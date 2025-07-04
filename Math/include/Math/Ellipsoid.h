@@ -39,6 +39,16 @@ class Ellipsoid
          */
         Ellipsoid(const Eigen::Vector<double,Dim>     &center,
                   const Eigen::Matrix<double,Dim,Dim> &shapeMatrix);
+
+        /**
+         * @brief Constructor.
+         * @param center The position of the center.
+         * @param rotationMatrix A rotation matrix to orient the ellipse.
+         * @param axesLengths Axes lenghts of the ellipsoid
+         */
+        Ellipsoid(const Eigen::Vector<double,Dim>     &center,
+            const Eigen::Matrix<double,Dim,Dim> &rotationMatrix, const Eigen::Vector<double,Dim> axesLengths) ;
+
                   
         /**
          * @brief Get the distance to a point.
@@ -70,6 +80,24 @@ class Ellipsoid
          */
         Eigen::Vector<double,Dim>
         inverse_shape_transformed_vector(const Eigen::Vector<double,Dim> &point);
+
+        /**
+         * @brief Inline function to return centre 'c' of the ellipsoid.
+         * @return centre vector 'c' of the ellipsoid.
+         */
+        inline Eigen::Vector<double,Dim> get_centre() const{ return _center;}
+
+        /**
+         * @brief Inline function to return matrix A of the ellipsoid.
+         * @return Matrix A of the ellipsoid.
+         */
+        inline Eigen::Matrix<double, Dim, Dim> get_ellipsod_matrix() const{ return _shapeMatrix;}
+
+        /**
+         * @brief Function to calculate and get the elipsoid inflated matrix
+         * @param inflation_radius radius to inflate the ellipsoid in m
+         */
+        Eigen::Matrix<double, Dim, Dim> get_inflated_ellipsoid_matrix(const double inflation_radius) const;   
     
     private:
         
@@ -78,6 +106,11 @@ class Ellipsoid
         Eigen::Vector<double, Dim> _center;                                                         ///< Center of the ellipsoid
         
         Eigen::Matrix<double, Dim, Dim> _shapeMatrix;                                               ///< A positive definite matrix describing its shape
+
+        Eigen::Vector<double, Dim> _axesLengths;                                                    ///< Axes lengths of the ellipse
+
+        Eigen::Matrix<double, Dim,Dim> _rotationMatrix;                                                       ///< Rotation matrix to denote orientation of ellipse 
+
 };
 
 } } // namespace

@@ -215,7 +215,35 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                     _obstacleConstraintVector.row(k) = ...
                 }
                 */
-                
+               _obstacleConstraintMatrix.resize(obstacles.size()*3,2);
+               _obstacleConstraintVector.resize(obstacles.size()*3);
+                for (int k = 0; k < obstacles.size(); ++k)
+                {
+                    if (obstacles[k].size() != _predictionSteps + 1)
+                    {
+                        throw std::invalid_argument("[ERROR] [DIFFERENTIAL DRIVE PREDICTIVE] track_trajectory(): "
+                                                    "This controller has N + 1 = " + std::to_string(_predictionSteps+1) + " control steps "
+                                                    "but obstacle #" + std::to_string(k+1) + " had " + std::to_string(obstacles[k].size()) + " "
+                                                    "predicted positions.");
+                    }
+                    Eigen::Vector2d obs_centre = obstacles[k][j].get_centre();
+                    for(int l = 0; l<3; l++)
+                    {
+                        Eigen::Vector2d v_temp = currentPose.translation()-obs_centre;
+                        v_temp(0) += _robotFootprint(l) * cos(angle-M_PI/2);
+                        v_temp(1) += _robotFootprint(l) * sin(angle-M_PI/2);
+                        Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(_robotRadii(l));
+                        Eigen::MatrixXd dv_by_dx = Eigen::MatrixXd::Zero(2, 3);
+                        dv_by_dx(0, 0) = dv_by_dx(1, 1) = -1;
+                        dv_by_dx(0, 2) = -_robotFootprint(l) * sin(angle-M_PI/2);
+                        dv_by_dx(1, 2) = _robotFootprint(l) * cos(angle-M_PI/2);
+                        Eigen::Vector3d dh = (v_temp.transpose() * (ellipsoid_shape.transpose() + ellipsoid_shape)) * dv_by_dx;
+                        double distance = v_temp.transpose() * ellipsoid_shape * v_temp-1;
+                        _obstacleConstraintMatrix.row(k*3+l) = -dh.transpose()*dfdu;
+                        _obstacleConstraintVector(k*3+l) = 2*distance;
+                    }
+                }
+                        
                 // Combine the constraints
                 unsigned int numRows = _controlConstraintVector.size() + _obstacleConstraintVector.size();
                 _constraintMatrix.resize(numRows, 2);

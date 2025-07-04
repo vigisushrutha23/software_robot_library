@@ -131,6 +131,12 @@ class DifferentialDrive
 
         Eigen::Matrix3d _propagationUncertainty = Eigen::Matrix3d::Identity();                      ///< Additional uncertainty on pose propagation
 
+        Eigen::Vector3d _robotFootprint;                                                            ///< Vector containing the robot distances of the robot footprint circle from central pose
+
+        Eigen::Vector3d _robotRadii;                                                                ///< Vector containing the robot footprint circle radii
+
+
+
 }; 
 
 } } // namespace
