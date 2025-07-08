@@ -55,7 +55,7 @@ struct DifferentialDriveParameters
     double maxLinearVelocity      = 2.0;                                                            ///< Maximum forward speed (m/s)
     Eigen::Matrix3d propagationUncertainty = Eigen::Matrix3d::Identity();                           ///< Uncertainty of configuration propagation in Kalman filter
     Eigen::Vector3d robotFootprint = Eigen::Vector3d::Constant(0.0);                                               ///< Distances of the robot footprint circles from the central pose (m)
-    Eigen::Vector3d robotRadii = Eigen::Vector3d::Constant(1.0);;                                                    ///< Radii of the robot footprint circles
+    Eigen::Vector3d robotRadii = Eigen::Vector3d::Constant(0.3);                                                    ///< Radii of the robot footprint circles
 
 
     DifferentialDriveParameters() = default;

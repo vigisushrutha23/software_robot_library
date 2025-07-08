@@ -153,7 +153,6 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
         for (int j = _predictionSteps - 1; j >= 0; --j)
         {    
             Eigen::Vector3d poseError = _predictedStates[j+1].pose.error(desiredStates[j+1].pose);  // Error at step j+1 is affected by control input at step j
-
             if (j == _predictionSteps - 1)
             {
                 costateVector = _poseErrorWeight[j] * poseError;                                    // Only need to evaluate costate vector at final steps   
@@ -198,7 +197,6 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                                             currentVelocity[1] - angular.lower,                     // -dw <= w - w_min
                                             linear.upper  - currentVelocity[0],                     //  dv <= v_max - v
                                             angular.upper - currentVelocity[1];                     //  dw <= w_max - ws
-        
                 // Set up the constraints for the obstacles
                 /*
                 for (int k = 0; k < obstacles.size(); ++k)
@@ -219,10 +217,10 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                _obstacleConstraintVector.resize(obstacles.size()*3);
                 for (int k = 0; k < obstacles.size(); ++k)
                 {
-                    if (obstacles[k].size() != _predictionSteps + 1)
+                    if (obstacles[k].size() != _predictionSteps)
                     {
                         throw std::invalid_argument("[ERROR] [DIFFERENTIAL DRIVE PREDICTIVE] track_trajectory(): "
-                                                    "This controller has N + 1 = " + std::to_string(_predictionSteps+1) + " control steps "
+                                                    "This controller has N = " + std::to_string(_predictionSteps+1) + " control steps "
                                                     "but obstacle #" + std::to_string(k+1) + " had " + std::to_string(obstacles[k].size()) + " "
                                                     "predicted positions.");
                     }
@@ -232,15 +230,16 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         Eigen::Vector2d v_temp = currentPose.translation()-obs_centre;
                         v_temp(0) += _robotFootprint(l) * cos(angle-M_PI/2);
                         v_temp(1) += _robotFootprint(l) * sin(angle-M_PI/2);
-                        Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(_robotRadii(l));
+                        const double temp_radius = _robotRadii(l);
+                        Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(temp_radius);
                         Eigen::MatrixXd dv_by_dx = Eigen::MatrixXd::Zero(2, 3);
-                        dv_by_dx(0, 0) = dv_by_dx(1, 1) = -1;
+                        dv_by_dx(0, 0) = dv_by_dx(1, 1) = 1;
                         dv_by_dx(0, 2) = -_robotFootprint(l) * sin(angle-M_PI/2);
                         dv_by_dx(1, 2) = _robotFootprint(l) * cos(angle-M_PI/2);
                         Eigen::Vector3d dh = (v_temp.transpose() * (ellipsoid_shape.transpose() + ellipsoid_shape)) * dv_by_dx;
                         double distance = v_temp.transpose() * ellipsoid_shape * v_temp-1;
                         _obstacleConstraintMatrix.row(k*3+l) = -dh.transpose()*dfdu;
-                        _obstacleConstraintVector(k*3+l) = 2*distance;
+                        _obstacleConstraintVector(k*3+l) = distance;
                     }
                 }
                         

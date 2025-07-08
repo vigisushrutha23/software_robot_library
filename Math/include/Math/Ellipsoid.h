@@ -38,8 +38,23 @@ class Ellipsoid
          * @param shapeMatrix A positive-definite matrix.
          */
         Ellipsoid(const Eigen::Vector<double,Dim>     &center,
-                  const Eigen::Matrix<double,Dim,Dim> &shapeMatrix);
-
+                  const Eigen::Matrix<double,Dim,Dim> &shapeMatrix)
+        {
+            _center = center;
+            _shapeMatrix = shapeMatrix;
+            _LLT = shapeMatrix.llt();
+                 
+            if (_LLT.info() != Eigen::Success)
+            {
+                throw std::runtime_error("[ERROR] [ELLIPSOID] Constructor: "
+                                           "Shape matrix is not positive definite; Cholesky decomposition failed.");
+            }
+            _rotationMatrix = Eigen::MatrixXd::Identity(shapeMatrix.rows(),shapeMatrix.rows());
+       
+            for(int i = 0; i < shapeMatrix.rows(); i++)
+               _axesLengths(i) = sqrt(1/shapeMatrix(i,i));
+                }
+                    
         /**
          * @brief Constructor.
          * @param center The position of the center.
@@ -47,7 +62,24 @@ class Ellipsoid
          * @param axesLengths Axes lenghts of the ellipsoid
          */
         Ellipsoid(const Eigen::Vector<double,Dim>     &center,
-            const Eigen::Matrix<double,Dim,Dim> &rotationMatrix, const Eigen::Vector<double,Dim> axesLengths) ;
+        const Eigen::Matrix<double,Dim,Dim> &rotationMatrix, const Eigen::Vector<double,Dim> axesLengths)
+        {
+            _center = center;
+            _rotationMatrix= rotationMatrix;
+            _axesLengths = axesLengths;
+            Eigen::MatrixXd temp_ellipsoid_matrix = Eigen::MatrixXd::Identity(rotationMatrix.rows(),rotationMatrix.rows());
+            for(int i = 0; i < rotationMatrix.rows(); i++)
+                temp_ellipsoid_matrix(i,i) = 1/pow(axesLengths(i),2);
+            _shapeMatrix = _rotationMatrix*temp_ellipsoid_matrix*_rotationMatrix.transpose();
+        
+            _LLT = _shapeMatrix.llt();
+            
+            if (_LLT.info() != Eigen::Success)
+            {
+                throw std::runtime_error("[ERROR] [ELLIPSOID] Constructor: "
+                                        "Shape matrix is not positive definite; Cholesky decomposition failed.");
+            }
+        }
 
                   
         /**
@@ -88,16 +120,29 @@ class Ellipsoid
         inline Eigen::Vector<double,Dim> get_centre() const{ return _center;}
 
         /**
+         * @brief Inline function to return axes lenghts of the ellipsoid.
+         * @return cvector containing axesLengths.
+         */
+        inline Eigen::Vector<double,Dim> get_axes_lengths() const{ return _axesLengths;}
+
+        /**
          * @brief Inline function to return matrix A of the ellipsoid.
          * @return Matrix A of the ellipsoid.
          */
-        inline Eigen::Matrix<double, Dim, Dim> get_ellipsod_matrix() const{ return _shapeMatrix;}
+        inline Eigen::Matrix<double, Dim, Dim> get_ellipsoid_matrix() const{ return _shapeMatrix;}
 
         /**
          * @brief Function to calculate and get the elipsoid inflated matrix
          * @param inflation_radius radius to inflate the ellipsoid in m
+         * @return The inflated ellipsoid matrix
          */
-        Eigen::Matrix<double, Dim, Dim> get_inflated_ellipsoid_matrix(const double inflation_radius) const;   
+        Eigen::Matrix<double, Dim, Dim> get_inflated_ellipsoid_matrix(const double inflation_radius) const
+        {
+            Eigen::MatrixXd temp_ellipsoid_matrix = Eigen::MatrixXd::Identity(_rotationMatrix.rows(),_rotationMatrix.rows()); 
+            for(int i = 0; i < _axesLengths.size(); i++)
+                temp_ellipsoid_matrix(i,i) = 1/pow(_axesLengths(i)+inflation_radius,2);
+            return _rotationMatrix*temp_ellipsoid_matrix*_rotationMatrix.transpose();
+        };   
     
     private:
         
@@ -109,7 +154,7 @@ class Ellipsoid
 
         Eigen::Vector<double, Dim> _axesLengths;                                                    ///< Axes lengths of the ellipse
 
-        Eigen::Matrix<double, Dim,Dim> _rotationMatrix;                                                       ///< Rotation matrix to denote orientation of ellipse 
+        Eigen::Matrix<double, Dim,Dim> _rotationMatrix;                                             ///< Rotation matrix to denote orientation of ellipse 
 
 };
 
