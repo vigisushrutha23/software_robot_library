@@ -225,21 +225,27 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                                                     "predicted positions.");
                     }
                     Eigen::Vector2d obs_centre = obstacles[k][j].get_centre();
+                    Eigen::Vector2d delc = {0.0, 0.0}; //Stationary object for now
                     for(int l = 0; l<3; l++)
                     {
-                        Eigen::Vector2d v_temp = currentPose.translation()-obs_centre;
-                        v_temp(0) += _robotFootprint(l) * cos(angle-M_PI/2);
-                        v_temp(1) += _robotFootprint(l) * sin(angle-M_PI/2);
+                        Eigen::Vector2d v_temp = obs_centre - currentPose.translation();
+                        v_temp(0) += -_robotFootprint(l) * cos(angle-M_PI/2);
+                        v_temp(1) += -_robotFootprint(l) * sin(angle-M_PI/2);
                         const double temp_radius = _robotRadii(l);
                         Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(temp_radius);
-                        Eigen::MatrixXd dv_by_dx = Eigen::MatrixXd::Zero(2, 3);
-                        dv_by_dx(0, 0) = dv_by_dx(1, 1) = 1;
-                        dv_by_dx(0, 2) = -_robotFootprint(l) * sin(angle-M_PI/2);
-                        dv_by_dx(1, 2) = _robotFootprint(l) * cos(angle-M_PI/2);
-                        Eigen::Vector3d dh = (v_temp.transpose() * (ellipsoid_shape.transpose() + ellipsoid_shape)) * dv_by_dx;
-                        double distance = v_temp.transpose() * ellipsoid_shape * v_temp-1;
-                        _obstacleConstraintMatrix.row(k*3+l) = -dh.transpose()*dfdu;
-                        _obstacleConstraintVector(k*3+l) = distance;
+                        Eigen::Vector2d V =(v_temp.transpose() * (ellipsoid_shape.transpose() + ellipsoid_shape));   
+                        Eigen::MatrixXd dvdx = Eigen::MatrixXd::Zero(2, 3);
+                        Eigen::Matrix2d dvdu = (-1/_controlFrequency)*Eigen::Matrix2d::Identity(2,2);
+                        Eigen::Matrix2d dvdc = Eigen::Matrix2d::Identity(2,2); 
+                        dvdx(0, 0) = dvdx(1, 1) = -1;
+                        dvdx(0, 2) = _robotFootprint(l) * sin(angle-M_PI/2);
+                        dvdx(1, 2) = -_robotFootprint(l) * cos(angle-M_PI/2);
+                        Eigen::Vector3d dhdx = V.transpose() * dvdx;
+                        Eigen::Vector2d dhdc = V.transpose() * dvdc;
+                        double h =  v_temp.transpose() * ellipsoid_shape * v_temp-1;
+                    
+                        _obstacleConstraintMatrix.row(k*3+l) = -V.transpose()*dvdu;
+                        _obstacleConstraintVector(k*3+l) = 2*h + dhdx.transpose() * (dfdu * currentVelocity) + dhdc.transpose()*delc;
                     }
                 }
                         
