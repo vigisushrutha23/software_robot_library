@@ -166,6 +166,9 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 Eigen::Matrix3d K = _poseErrorWeight[j];
                 Eigen::Matrix2d M = _controlWeight[j];
                 double angle = currentPose.angle();                                                 // Used in multiple places
+                RobotLibrary::Model::Pose2D desiredPose = desiredStates[j].pose;
+                double angle_desired = desiredPose.angle();                                                 // Used in multiple places
+
                  
                 // Partial derivative of state propagation w.r.t. configuration                                                    
                 Eigen::Matrix<double,3,3> dfdx = configuration_jacobian(currentPose, currentVelocity, _controlFrequency);
@@ -216,6 +219,8 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                std::cout<<"\n=====Current Pose & Velocity "<<currentPose.translation()(0)<<"\t"<< currentPose.translation()(1)<<"\t"<<currentVelocity(0)<<"\t"<<currentVelocity(1)<<" ====\n";
                _obstacleConstraintMatrix.resize(obstacles.size()*3,2);
                _obstacleConstraintVector.resize(obstacles.size()*3);
+                Eigen::MatrixXd P = Eigen::MatrixXd::Zero(2,3); //Selection matrix
+                P(0,0) = P(1,1) = 1.0;
                 for (int k = 0; k < obstacles.size(); ++k)
                 {
                     if (obstacles[k].size() != _predictionSteps)
@@ -229,30 +234,51 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                     Eigen::Vector2d delc = {0.0, 0.0}; //Stationary object for now
                     for(int l = 0; l<3; l++)
                     {
-                        Eigen::Vector2d v_temp = obs_centre - currentPose.translation();
-                        v_temp(0) += -_robotFootprint(l) * cos(angle-M_PI/2) - currentVelocity(0)*cos(angle);
-                        v_temp(1) += -_robotFootprint(l) * sin(angle-M_PI/2) - currentVelocity(0)*sin(angle);
+                        Eigen::Vector3d v_temp_curr  = {0.0,0.0,0.0}; 
+                        v_temp_curr.head(2) = currentPose.translation();
+                        v_temp_curr(0) += _robotFootprint(l) * cos(angle-M_PI/2) ;
+                        v_temp_curr(1) += _robotFootprint(l) * sin(angle-M_PI/2) ;
+                        Eigen::Vector3d v_temp_desired  = {0.0,0.0,0.0}; 
+                        v_temp_desired.head(2) = desiredPose.translation();
+                        v_temp_desired(0) += _robotFootprint(l) * cos(angle_desired-M_PI/2) + desiredVelocity(0)*cos(angle_desired) ;
+                        v_temp_desired(1) += _robotFootprint(l) * sin(angle_desired-M_PI/2) + desiredVelocity(0)*sin(angle_desired) ;
                         const double temp_radius = _robotRadii(l);
                         Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(temp_radius);
-                        Eigen::Vector2d V =(v_temp.transpose() * (ellipsoid_shape.transpose() + ellipsoid_shape));   
-                        Eigen::MatrixXd dvdx = Eigen::MatrixXd::Zero(2, 3);
+                        
+
+                        Eigen::Vector2d V_curr =(obs_centre - P * v_temp_curr);
+                        Eigen::Vector2d V_desired =(obs_centre - P * v_temp_desired);  //still assuming stationary object
+
+                        Eigen::MatrixXd dvdx_curr = Eigen::MatrixXd::Zero(2, 3);
+                        Eigen::MatrixXd dvdx_desired = Eigen::MatrixXd::Zero(2, 3);
+
                         Eigen::Matrix2d dvdu = Eigen::Matrix2d::Zero(2, 2);
                         
-                        dvdx(0, 0) = dvdx(1, 1) = -1;
-                        dvdx(0, 2) = (currentVelocity(0)*sin(angle))/_controlFrequency + _robotFootprint(l) * sin(angle-M_PI/2);
-                        dvdx(1, 2) = -(currentVelocity(0)*cos(angle))/_controlFrequency -_robotFootprint(l) * cos(angle-M_PI/2);
+                        dvdx_curr(0, 0) = dvdx_curr(1, 1) = -1;
+                        dvdx_curr(0, 2) = _robotFootprint(l) * sin(angle-M_PI/2);
+                        dvdx_curr(1, 2) = -_robotFootprint(l) * cos(angle-M_PI/2);
+
+                        dvdx_desired(0, 0) = dvdx_desired(1, 1) = -1;
+                        dvdx_desired(0, 2) = _robotFootprint(l) * sin(angle_desired-M_PI/2) + desiredVelocity(0)*sin(angle_desired);
+                        dvdx_desired(1, 2) = -_robotFootprint(l) * cos(angle_desired-M_PI/2) - desiredVelocity(0)*cos(angle_desired);
 
                         dvdu(0,0) = -cos(angle)/_controlFrequency;
                         dvdu(1,0) = -sin(angle)/_controlFrequency;
-                        Eigen::Vector3d dhdx = V.transpose() * dvdx;
-                        Eigen::Vector2d dhdc = V; 
+                        //Eigen::Vector3d dhdx = V.transpose() * dvdx;
+                        Eigen::Vector2d dhdc = V_curr; 
 
                         
-                        double h =  v_temp.transpose() * ellipsoid_shape * v_temp-1;
+                        double h_current =  V_curr.transpose() * ellipsoid_shape * V_curr;
+                        double h_desired =  V_desired.transpose() * ellipsoid_shape * V_desired;
+                        Eigen::Vector3d delta_h_desired = V_desired.transpose()*P.transpose()*(ellipsoid_shape.transpose() + ellipsoid_shape)*P*dvdx_desired;
+                        Eigen::Vector3d poseError_curr = _predictedStates[j].pose.error(desiredStates[j].pose);
+
+
                     
-                        _obstacleConstraintMatrix.row(k*3+l) = -V.transpose()*dvdu;
-                        _obstacleConstraintVector(k*3+l) = h + dhdx.transpose() * (dfdu * currentVelocity) + dhdc.transpose()*delc;
-                        std::cout<<"\n==== Obstacle constraint "<<h<<"\t"<< dhdx.transpose() * (dfdu * currentVelocity)<<"======\n";
+                        _obstacleConstraintMatrix.row(k*3+l) = -delta_h_desired.transpose()*dfdu;
+
+                        _obstacleConstraintVector(k*3+l) = h_desired + delta_h_desired.transpose()*( dfdx * poseError_curr - dfdu * desiredVelocity) - h_current ;
+                        std::cout<<"\n==== Obstacle constraint "<<h_current<<"\t"<< _obstacleConstraintMatrix.row(k*3+l) <<"======\n";
                     }
                 }
                         
