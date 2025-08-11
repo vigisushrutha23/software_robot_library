@@ -291,19 +291,19 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         dbdx(1,2) = cos(v_temp_desired(2));
                         
                         Eigen::Vector2d r = V_desired - V_desired/m;
-                        Eigen::Matrix2d drdu = (P * dfdu) - (P * dfdu)/m  + (P * dfdu) * (r *r.transpose()*ellipsoid_shape)/pow(m,3);
-                        Eigen::Matrix<double,2,3>  drdx = (P * dfdx) - (P * dfdx)/m  + ((r *r.transpose()*ellipsoid_shape)/pow(m,3))*(P * dfdx) ;
+                        Eigen::Matrix2d drdu = (P * dfdu) - (P * dfdu)/m  + (P * dfdu).transpose() * (r *r.transpose()*ellipsoid_shape)/pow(m,3);
+                        Eigen::Matrix<double,2,3>  drdx = (P * dfdx) - (P * dfdx)/m  + (r *r.transpose()*ellipsoid_shape)*(P * dfdx)/pow(m,3) ;
 
-                        Eigen::Vector2d dhdu = drdu.transpose()*r + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
-                        Eigen::Vector3d dhdx =  drdx.transpose()*r + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
+                        Eigen::Vector2d dhdu = 2* (V_desired.transpose()* ellipsoid_shape * (P*dfdu)).transpose() + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
+                        Eigen::Vector3d dhdx =  2* (V_desired.transpose()*ellipsoid_shape * (P * dfdx)).transpose() + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
 
-                        double h_curr =  r.dot(r)/2.0 + b.dot((r/r.norm()))- (1.0) ;
+                        double h_curr =  V_curr.transpose()*ellipsoid_shape*V_curr + b.dot((r/r.norm())) ;
                         std::cout<<"\n Direction Dot product "<<b.dot((r/r.norm()));
 
                     
                         _obstacleConstraintMatrix.row(k*3+l) = -dhdu.transpose();
 
-                        _obstacleConstraintVector(k*3+l) =  h_curr ;//+ dhdx.transpose()*dx;
+                        _obstacleConstraintVector(k*3+l) =  0.5*h_curr + dhdx.transpose()*dx;
                         std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l);
                     }
                 }
@@ -332,9 +332,12 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 catch (const std::exception &exception)
                 {
                     std::cout<<"\n===========ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR================\n";
+                    std::cout<<du;
+                    return du;
                     throw std::runtime_error(std::string(exception.what()) + " "
-                                             "Failed on recursion no. " + std::to_string(i) + " "
-                                             "at step no. " + std::to_string(j) + ".");
+                                            "Failed on recursion no. " + std::to_string(i) + " "
+                                           "at step no. " + std::to_string(j) + ".");
+                    
                 }
                 
                 _predictedStates[j].velocity += du ;                                                 // Increment control input
