@@ -264,7 +264,7 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                        
                         const double temp_radius = _robotRadii(l);
                        
-                        Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(0.0);
+                        Eigen::Matrix2d ellipsoid_shape = obstacles[k][j].get_inflated_ellipsoid_matrix(temp_radius);
                                               
 
                         Eigen::Vector2d V_desired = P*v_temp_desired - obs_centre ;  //still assuming stationary object
@@ -297,14 +297,19 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         Eigen::Vector2d dhdu = 2* (V_desired.transpose()* ellipsoid_shape * (P*dfdu)).transpose() + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
                         Eigen::Vector3d dhdx =  2* (V_desired.transpose()*ellipsoid_shape * (P * dfdx)).transpose() + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
 
-                        double h_curr =  V_curr.transpose()*ellipsoid_shape*V_curr + b.dot((r/r.norm())) ;
+                        double h_curr =  V_curr.transpose() * ellipsoid_shape * V_curr + b.dot((r/r.norm())) ;
                         std::cout<<"\n Direction Dot product "<<b.dot((r/r.norm()));
 
-                    
-                        _obstacleConstraintMatrix.row(k*3+l) = -dhdu.transpose();
+                        double alpha = 0.5;
+                        double epsilon = 0.01;
+                        _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu;
 
-                        _obstacleConstraintVector(k*3+l) =  0.5*h_curr + dhdx.transpose()*dx;
+                        _obstacleConstraintVector(k*3+l) =  alpha/_controlFrequency*h_curr + dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr)) + epsilon;
+                        if (l==1)
+                            dx = v_temp_desired - v_temp_curr;
                         std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l);
+                        std::cout<<"\n==== Dhdx x del_x "<< dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr));
+                        std::cout<<"\n==== H_CURR =  "<< alpha/_controlFrequency*h_curr;
                     }
                 }
                         
@@ -334,9 +339,11 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                     std::cout<<"\n===========ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR================\n";
                     std::cout<<du;
                     return du;
+
                     throw std::runtime_error(std::string(exception.what()) + " "
                                             "Failed on recursion no. " + std::to_string(i) + " "
                                            "at step no. " + std::to_string(j) + ".");
+
                     
                 }
                 
