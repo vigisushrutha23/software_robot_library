@@ -277,9 +277,8 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         //Eigen::Vector2d dhdc = V_curr; 
 
                         
-                        double h_desired =  V_desired.transpose() * ellipsoid_shape * V_desired - 1 ;
 
-                        double m = pow(h_desired + 1 , 0.5);
+                        double m = pow(V_desired.transpose() * ellipsoid_shape * V_desired , 0.5);
                         Eigen::Vector2d b;
                         b << cos(v_temp_desired(2)), sin(v_temp_desired(2));
                         Eigen::Matrix2d dbdu = Eigen::Matrix2d::Zero();
@@ -301,22 +300,26 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         Eigen::Matrix2d drdu = (P * dfdu) - (P * dfdu)/m  + (P * dfdu).transpose() * (r *r.transpose()*ellipsoid_shape)/pow(m,3);
                         Eigen::Matrix<double,2,3>  drdx = (P * dfdx) - (P * dfdx)/m  + (r *r.transpose()*ellipsoid_shape)*(P * dfdx)/pow(m,3) ;
 
-                        Eigen::Vector2d dhdu = 2* (V_desired.transpose()* ellipsoid_shape * (P*dfdu)).transpose() + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
+                        double h_desired =  V_desired.transpose() * ellipsoid_shape * V_desired + b.dot((r/r.norm())) ;
+
+
+
+                        Eigen::Vector2d dhdu = 2* (V_desired.transpose()* ellipsoid_shape * (P * dfdu)).transpose() + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
                         Eigen::Vector3d dhdx =  2* (V_desired.transpose()*ellipsoid_shape * (P * dfdx)).transpose() + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
 
                         double h_curr =  V_curr.transpose() * ellipsoid_shape * V_curr + b_curr.dot((r_curr/r_curr.norm())) ;
                         std::cout<<"\n Direction Dot product "<<b_curr.dot((r_curr/r_curr.norm()));
 
-                        double alpha = 100.0;
-                        double epsilon = 0.001;
-                        _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu;
+                        double alpha = 0.1;
+                        double epsilon = 0.0;
+                        _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu -dhdu.transpose() ;
 
-                        _obstacleConstraintVector(k*3+l) =  alpha/_controlFrequency*h_curr + dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr)) + epsilon;
+                        _obstacleConstraintVector(k*3+l) =  -std::exp((alpha/_controlFrequency))*h_curr + h_desired + dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr)) + epsilon;
                         if (l==1)
                             dx = v_temp_desired - v_temp_curr;
                         std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l);
                         std::cout<<"\n==== Dhdx x del_x "<< dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr));
-                        std::cout<<"\n==== H_CURR =  "<< alpha/_controlFrequency*h_curr;
+                        std::cout<<"\n==== H_CURR =  "<< -std::exp((alpha/_controlFrequency))*h_curr + h_desired;
                     }
                 }
                         
