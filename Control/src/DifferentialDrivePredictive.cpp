@@ -304,22 +304,22 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
 
 
 
-                        Eigen::Vector2d dhdu = 2* (V_desired.transpose()* ellipsoid_shape * (P * dfdu)).transpose() + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
-                        Eigen::Vector3d dhdx =  2* (V_desired.transpose()*ellipsoid_shape * (P * dfdx)).transpose() + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
+                        Eigen::Vector2d dhdu = 2 * dfdu.transpose() * (P.transpose() * ellipsoid_shape * V_desired) + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
+                        Eigen::Vector3d dhdx =  2 * dfdx.transpose() * (P.transpose() * ellipsoid_shape * V_desired) + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
 
                         double h_curr =  V_curr.transpose() * ellipsoid_shape * V_curr + b_curr.dot((r_curr/r_curr.norm())) ;
                         std::cout<<"\n Direction Dot product "<<b_curr.dot((r_curr/r_curr.norm()));
 
-                        double alpha = 0.1;
+                        double alpha = 1.0;
                         double epsilon = 0.0;
                         _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu -dhdu.transpose() ;
 
-                        _obstacleConstraintVector(k*3+l) =  -std::exp((alpha/_controlFrequency))*h_curr + h_desired + dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr)) + epsilon;
+                        _obstacleConstraintVector(k*3+l) =  alpha/_controlFrequency*h_curr + dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr)) + epsilon;
                         if (l==1)
                             dx = v_temp_desired - v_temp_curr;
                         std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l);
                         std::cout<<"\n==== Dhdx x del_x "<< dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr));
-                        std::cout<<"\n==== H_CURR =  "<< -std::exp((alpha/_controlFrequency))*h_curr + h_desired;
+                        std::cout<<"\n==== H_CURR =  "<< alpha/_controlFrequency*h_curr ;
                     }
                 }
                         
