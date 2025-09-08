@@ -297,15 +297,15 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         Eigen::Vector2d b_curr;
                         b_curr << cos(v_temp_curr(2)), sin(v_temp_curr(2));
 
-                        Eigen::Matrix2d drdu = (P * dfdu) - (P * dfdu)/m  + (P * dfdu).transpose() * (r *r.transpose()*ellipsoid_shape)/pow(m,3);
-                        Eigen::Matrix<double,2,3>  drdx = (P * dfdx) - (P * dfdx)/m  + (r *r.transpose()*ellipsoid_shape)*(P * dfdx)/pow(m,3) ;
+                        Eigen::Matrix2d drdu = (P * dfdu) - (P * dfdu)/m  + (V_desired *V_desired.transpose()*ellipsoid_shape* (P * dfdu) )/pow(m,3);
+                        Eigen::Matrix<double,2,3>  drdx = (P * dfdx) - (P * dfdx)/m  + (V_desired *V_desired.transpose()*ellipsoid_shape)*(P * dfdx)/pow(m,3) ;
 
                         double h_desired =  V_desired.transpose() * ellipsoid_shape * V_desired + b.dot((r/r.norm())) ;
 
 
 
-                        Eigen::Vector2d dhdu = 2 * dfdu.transpose() * (P.transpose() * ellipsoid_shape * V_desired) + (1/r.norm())*drdu.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdu.transpose()*(r/r.norm());
-                        Eigen::Vector3d dhdx =  2 * dfdx.transpose() * (P.transpose() * ellipsoid_shape * V_desired) + (1/r.norm())*drdx.transpose()*(Eigen::Matrix2d::Identity() - r*r.transpose()).transpose()*b + dbdx.transpose()*(r/r.norm());
+                        Eigen::Vector2d dhdu = 2 * V_desired.transpose()*ellipsoid_shape*P*dfdu + (1/r.norm())*b.transpose()*((Eigen::Matrix2d::Identity() - r*r.transpose()/pow(r.norm(),2))*drdu) + (r.transpose()/r.norm())*dbdu;
+                        Eigen::Vector3d dhdx = 2 * V_desired.transpose()*ellipsoid_shape*P*dfdx + (1/r.norm())*b.transpose()*((Eigen::Matrix2d::Identity() - r*r.transpose()/pow(r.norm(),2))*drdx) + (r.transpose()/r.norm())*dbdx;
 
                         double h_curr =  V_curr.transpose() * ellipsoid_shape * V_curr + b_curr.dot((r_curr/r_curr.norm())) ;
                         std::cout<<"\n Direction Dot product "<<b_curr.dot((r_curr/r_curr.norm()));
@@ -348,11 +348,11 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 {
                     std::cout<<"\n===========ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR================\n";
                     std::cout<<du;
-                    return du;
+                    /*return du;
 
                     throw std::runtime_error(std::string(exception.what()) + " "
                                             "Failed on recursion no. " + std::to_string(i) + " "
-                                           "at step no. " + std::to_string(j) + ".");
+                                           "at step no. " + std::to_string(j) + ".");*/
 
                     
                 }
