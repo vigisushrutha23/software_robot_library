@@ -300,26 +300,26 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                         Eigen::Matrix2d drdu = (P * dfdu) - (P * dfdu)/m  + (V_desired *V_desired.transpose()*ellipsoid_shape* (P * dfdu) )/pow(m,3);
                         Eigen::Matrix<double,2,3>  drdx = (P * dfdx) - (P * dfdx)/m  + (V_desired *V_desired.transpose()*ellipsoid_shape)*(P * dfdx)/pow(m,3) ;
 
-                        double h_desired =  V_desired.transpose() * ellipsoid_shape * V_desired + b.dot((r/r.norm())) ;
+                        double h_desired =  V_desired.transpose() * ellipsoid_shape * V_desired + b.dot((r/r.norm())) -1.0;
 
 
 
                         Eigen::Vector2d dhdu = 2 * V_desired.transpose()*ellipsoid_shape*P*dfdu + (1/r.norm())*b.transpose()*((Eigen::Matrix2d::Identity() - r*r.transpose()/pow(r.norm(),2))*drdu) + (r.transpose()/r.norm())*dbdu;
                         Eigen::Vector3d dhdx = 2 * V_desired.transpose()*ellipsoid_shape*P*dfdx + (1/r.norm())*b.transpose()*((Eigen::Matrix2d::Identity() - r*r.transpose()/pow(r.norm(),2))*drdx) + (r.transpose()/r.norm())*dbdx;
 
-                        double h_curr =  V_curr.transpose() * ellipsoid_shape * V_curr + b_curr.dot((r_curr/r_curr.norm())) ;
+                        double h_curr =  V_curr.transpose() * ellipsoid_shape * V_curr + b_curr.dot((r_curr/r_curr.norm())) -1.0;
                         std::cout<<"\n Direction Dot product "<<b_curr.dot((r_curr/r_curr.norm()));
 
-                        double alpha = 1.0;
+                        double alpha = 5.0;
                         double epsilon = 0.0;
-                        _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu -dhdu.transpose() ;
+                        _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu ;
 
-                        _obstacleConstraintVector(k*3+l) =  alpha/_controlFrequency*h_curr + dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr)) + epsilon;
+                        _obstacleConstraintVector(k*3+l) = - alpha/_controlFrequency*h_desired + h_curr + epsilon;
                         if (l==1)
                             dx = v_temp_desired - v_temp_curr;
                         std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l);
-                        std::cout<<"\n==== Dhdx x del_x "<< dhdx.transpose()*(dfdx*(v_temp_desired-v_temp_curr));
-                        std::cout<<"\n==== H_CURR =  "<< alpha/_controlFrequency*h_curr ;
+                        std::cout<<"\n==== Dfdu \n" << dfdu;
+                        std::cout<<"\n==== H_CURR =  "<<  h_desired - alpha/_controlFrequency*h_curr + epsilon; ;
                     }
                 }
                         
@@ -347,7 +347,6 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 catch (const std::exception &exception)
                 {
                     std::cout<<"\n===========ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR================\n";
-                    std::cout<<du;
                     /*return du;
 
                     throw std::runtime_error(std::string(exception.what()) + " "
@@ -356,7 +355,7 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
 
                     
                 }
-                
+                std::cout<<"\n ====== Change in Velocity========== "<<du(0)<<"\t"<<du(1);
                 _predictedStates[j].velocity += du ;                                                 // Increment control input
 
                 double norm = du.norm();
@@ -368,7 +367,8 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                                                                    _controlFrequency);
                 
                 Eigen::Vector3d new_E  = tempNewPose.error(desiredStates[j+1].pose);
-                dfdx = configuration_jacobian(currentPose, _predictedStates[j].velocity  , _controlFrequency); 
+                std::cout<<"\n========New Error ========== \n"<<new_E;
+                //dfdx = configuration_jacobian(currentPose, _predictedStates[j].velocity  , _controlFrequency); 
                 costateVector = -new_E.transpose() * K *dfdx  + costateVector.transpose()*dfdx; 
             }
         }
