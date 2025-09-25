@@ -312,30 +312,31 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
 
                         double alpha = 5.0;
                         double epsilon = 0.0;
-                        _obstacleConstraintMatrix.row(k*3+l) = -dhdx.transpose()*dfdu ;
+                        _obstacleConstraintMatrix.row(k*3+l) = -dhdu.transpose() ;
 
-                        _obstacleConstraintVector(k*3+l) = - alpha/_controlFrequency*h_desired + h_curr + epsilon;
+                        _obstacleConstraintVector(k*3+l) =  h_desired + epsilon + dhdx.transpose()*dx ;
                         if (l==1)
                             dx = v_temp_desired - v_temp_curr;
-                        std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l);
+                        std::cout<<"\n==== Obstacle constraint "<<_obstacleConstraintVector(k*3+l)<<"\t"<< _obstacleConstraintMatrix.row(k*3+l)<<"\t"<<_obstacleConstraintVector(k*3+l)-_obstacleConstraintMatrix.row(k*3+l)*del_u;
                         std::cout<<"\n==== Dfdu \n" << dfdu;
-                        std::cout<<"\n==== H_CURR =  "<<  h_desired - alpha/_controlFrequency*h_curr + epsilon; ;
+                        std::cout<<"\n==== H_CURR =  "<<  h_desired;
                     }
                 }
                         
                 // Combine the constraints
-                unsigned int numRows = _controlConstraintVector.size() + _obstacleConstraintVector.size();
+                //unsigned int numRows = _controlConstraintVector.size() + _obstacleConstraintVector.size();
+                unsigned int numRows =  _obstacleConstraintVector.size();
                 _constraintMatrix.resize(numRows, 2);
-                _constraintMatrix.block(0,0,4,2)         = _controlConstraintMatrix;
-                _constraintMatrix.block(4,0,numRows-4,2) = _obstacleConstraintMatrix;
+                //_constraintMatrix.block(0,0,4,2)         = _controlConstraintMatrix;
+                _constraintMatrix.block(0,0,numRows,2) = _obstacleConstraintMatrix;
                 
                 _constraintVector.resize(numRows);
-                _constraintVector.segment(0,4)         = _controlConstraintVector;
-                _constraintVector.segment(4,numRows-4) = _obstacleConstraintVector;
+                //_constraintVector.segment(0,4)         = _controlConstraintVector;
+                _constraintVector.segment(0,numRows) = _obstacleConstraintVector;
                 
                 // Solve the control
                 
-                Eigen::Vector2d du = {0.0, 0.0};                                                    // We want to solve for this                                        
+                Eigen::Vector2d du =del_u;                                                    // We want to solve for this                                        
                 try
                 {
                     du = QPSolver<double>::solve(d2Ldu2,
@@ -347,11 +348,11 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 catch (const std::exception &exception)
                 {
                     std::cout<<"\n===========ERRORRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR================\n";
-                    /*return du;
+                    return du;
 
                     throw std::runtime_error(std::string(exception.what()) + " "
                                             "Failed on recursion no. " + std::to_string(i) + " "
-                                           "at step no. " + std::to_string(j) + ".");*/
+                                           "at step no. " + std::to_string(j) + ".");
 
                     
                 }
