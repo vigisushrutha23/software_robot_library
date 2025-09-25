@@ -62,4 +62,15 @@ Ellipsoid<Dim>::inverse_shape_transformed_vector(const Eigen::Vector<double,Dim>
     return _LLT.solve(point - _center);
 }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+ //                       Get a point on the surface along a ray to the center                     //
+////////////////////////////////////////////////////////////////////////////////////////////////////
+template <unsigned int Dim>
+Eigen::Vector<double,Dim>
+Ellipsoid<Dim>::point_on_surface(const Eigen::Vector<double,Dim> &referencePoint) const
+{
+    return referencePoint / sqrt(referencePoint.dot(_LLT.solve(referencePoint)));
+}
+
+
 } } // namespace

@@ -9,9 +9,10 @@
  * @details This class inherits the RobotLibrary::Model::DifferentialDriveBase and provides a simple
  *          method for nonlinear feedback control.
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  */
@@ -19,7 +20,6 @@
 #ifndef DIFFERENTIAL_DRIVE_FEEDBACK_H
 #define DIFFERENTIAL_DRIVE_FEEDBACK_H
 
-#include <Control/DataStructures.h>
 #include <Control/DifferentialDriveBase.h>
 
 namespace RobotLibrary { namespace Control {
@@ -50,14 +50,23 @@ class DifferentialDriveFeedback : public RobotLibrary::Control::DifferentialDriv
          */
         Eigen::Vector2d
         track_trajectory(const RobotLibrary::Model::Pose2D &desiredPose,
-                         const Eigen::Vector2d &desiredVelocity);
+                         const Eigen::Vector2d &desiredVelocity,
+                         const std::vector<RobotLibrary::Model::Obstacle2D> &obstacles);
 
         private:
             
             double _orientationGain = 5.0;                                                          ///< Feedback gain on orientation error
+            
             double _xPositionGain   = 1.0;                                                          ///< Feedback gain on x-translation error       
+            
             double _yPositionGain   = 50.0;                                                         ///< Feedback gain on y-translation error           
-
+ 
+            /**
+             * @brief Compute the control barrier constraints for an obstacle.
+             */
+            RobotLibrary::Control::BarrierConstraints
+            compute_barrier_constraints(const RobotLibrary::Model::Pose2D &pose,
+                                        const RobotLibrary::Model::Obstacle2D &obstacle);
 };                                                                                                  // Semicolon needed after class declaration
 
 } } // Namespace                                                                                      

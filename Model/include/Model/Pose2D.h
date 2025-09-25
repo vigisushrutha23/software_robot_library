@@ -2,7 +2,7 @@
  * @file    Pose2D.h
  * @author  Jon Woolfrey
  * @email   jonathan.woolfrey@gmail.com
- * @date    May 2025
+ * @date    July 2025
  * @version 1.0
  * @brief   A class that describes the position & orientation of an object in 2D space.
  * 
@@ -10,9 +10,10 @@
  *          scalar. Arithmetic can be used to propagate & invert these objects for
  *          performing transforms in 2D space.
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  */
@@ -87,7 +88,7 @@ class Pose2D
            * @brief  Computes the inverse / opposite of this pose.
            */
           Pose2D
-          inverse();
+          inverse() const;
           
           /**
            * @brief Multiply this pose with another to produce a third.
@@ -105,7 +106,7 @@ class Pose2D
            * @brief Apply a point transformation to a vector.
            */
           Eigen::Vector2d
-          operator* (const Eigen::Vector2d &other);
+          operator* (const Eigen::Vector2d &other) const;
           
           /**
            * @brief Return the angle member of this class.

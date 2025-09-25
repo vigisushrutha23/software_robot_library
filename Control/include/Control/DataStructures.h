@@ -2,16 +2,18 @@
  * @file    DataStructures.h
  * @author  Jon Woolfrey
  * @email   jonathan.woolfrey@gmail.com
- * @date    April 2025
- * @version 1.0
+ * @date    August 2025
+ * @version 2.0
+ *
  * @brief   Contains custom structs used in Control classes.
  *
- * @copyright Copyright (c) 2025 Jon Woolfrey
+ * @copyright (c) 2025 Jon Woolfrey
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
+ *            Contact: jonathan.woolfrey@gmail.com
  *
- * @license Open Source / Commercial Use License (OSCL)
- *
- * @see https://github.com/Woolfrey/software_robot_library for more information.
- * @see https://github.com/Woolfrey/software_simple_qp for the optimisation algorithm used in the control.
+ * @see https://github.com/Woolfrey/software_robot_library
+ * @see https://github.com/Woolfrey/software_simple_qp
  */
 
 #ifndef CONTROL_DATA_STRUCTS_H
@@ -29,26 +31,29 @@ struct SerialLinkParameters
 {
     SerialLinkParameters() = default;                                                               ///< This enables default options
     
-    double jointPositionGain    = 100.0;                                                            ///< Scales the position error feedback  
-    double jointVelocityGain    = 20.0;                                                             ///< Scales the velocity error feedback
     double maxJointAcceleration = 5.0;                                                              ///< Limits joint acceleration
+    
     double minManipulability    = 1e-04;                                                            ///< Threshold for singularity avoidance
     
-    unsigned int controlFrequency = 100;                                                            ///< Rate at which control loop operates.    
+    unsigned int controlFrequency = 500;                                                            ///< Rate at which control loop operates.    
     
-    Eigen::Matrix<double,6,6> cartesianStiffness = (Eigen::MatrixXd(6,6) << 10.0,  0.0,  0.0, 0.0, 0.0, 0.0,
-                                                                             0.0, 10.0,  0.0, 0.0, 0.0, 0.0,
-                                                                             0.0,  0.0, 10.0, 0.0, 0.0, 0.0, 
-                                                                             0.0,  0.0,  0.0, 2.0, 0.0, 0.0,
-                                                                             0.0,  0.0,  0.0, 0.0, 2.0, 0.0,
-                                                                             0.0,  0.0,  0.0, 0.0, 0.0, 2.0).finished(); ///< Scales pose error feedback
+    Eigen::Matrix<double,6,6> cartesianPoseGain = (Eigen::MatrixXd(6,6) << 10.0,  0.0,   0.0,  0.0,  0.0,  0.0,
+                                                                            0.0, 10.0,   0.0,  0.0,  0.0,  0.0,
+                                                                            0.0,  0.0,  10.0,  0.0,  0.0,  0.0, 
+                                                                            0.0,  0.0,   0.0,  5.0,  0.0,  0.0,
+                                                                            0.0,  0.0,   0.0,  0.0,  5.0,  0.0,
+                                                                            0.0,  0.0,   0.0,  0.0,  0.0,  5.0).finished(); ///< Scales pose error feedback
                                                                              
-    Eigen::Matrix<double,6,6> cartesianDamping = (Eigen::MatrixXd(6,6) << 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                                                          0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-                                                                          0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 
-                                                                          0.0, 0.0, 0.0, 0.2, 0.0, 0.0,
-                                                                          0.0, 0.0, 0.0, 0.0, 0.2, 0.0,
-                                                                          0.0, 0.0, 0.0, 0.0, 0.0, 0.2).finished(); ///< Scales twist error feedback                                                                                                                        
+    Eigen::Matrix<double,6,6> cartesianVelocityGain = (Eigen::MatrixXd(6,6) << 20.0,  0.0,  0.0, 0.0, 0.0, 0.0,
+                                                                                0.0, 20.0,  0.0, 0.0, 0.0, 0.0,
+                                                                                0.0,  0.0, 20.0, 0.0, 0.0, 0.0, 
+                                                                                0.0,  0.0,  0.0, 2.0, 0.0, 0.0,
+                                                                                0.0,  0.0,  0.0, 0.0, 2.0, 0.0,
+                                                                                0.0,  0.0,  0.0, 0.0, 0.0, 2.0).finished(); ///< Scales twist error feedback                                                                                                                        
+                                                                                  
+    std::vector<double> jointPositionGains;
+    
+    std::vector<double> jointVelocityGains;
                                                                           
     SolverOptions<double> qpsolver = SolverOptions<double>();                                       ///< Parameters for the underlying QP solver
 };
@@ -65,6 +70,8 @@ struct DifferentialDriveFeedbackParameters
     double orientationGain     =  10.0;                                                             ///< Feedback gain on orientation error   
     double xPositionGain       =   5.0;                                                             ///< Feedback gain on x position error
     double yPositionGain       =  25.0;                                                             ///< Feedback gain on y position error
+
+    SolverOptions<double> qpsolver = SolverOptions<double>();                                       ///< For underlying QP solver
 };
 
 /**
@@ -85,6 +92,17 @@ struct DifferentialDrivePredictiveParameters
     = (Eigen::MatrixXd(3,3) << 200.0,   0.00,  0.00,
                                  0.0, 200.00, -0.09, 
                                  0.0,  -0.09,  0.10).finished();
+};
+
+/**
+ * @brief A container for a control barrier function.
+ * @note Standard form for optimsation is -\dot{b}^T * u \le \alpha(b)
+ */
+struct BarrierConstraints
+{
+    double scalar;                                                                                  ///< Right-hand-side of the CBF
+    
+    Eigen::Matrix<double,1,Eigen::Dynamic> rowVector;                                               ///< Left-hand-side of the CBF
 };
 
 } } // namespace

@@ -6,9 +6,10 @@
  * @version 1.0
  * @brief   A base class to standardise all control classes of differential drive robots.
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  */
@@ -22,11 +23,14 @@ namespace RobotLibrary { namespace Control {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 DifferentialDriveBase::DifferentialDriveBase(const double &controlFrequency,
                                              const double &minimumSafeDistance,
-                                             const RobotLibrary::Model::DifferentialDriveParameters &modelParameters)
+                                             const RobotLibrary::Model::DifferentialDriveParameters &modelParameters,
+                                             const SolverOptions<double> &solverOptions)
 : DifferentialDrive(modelParameters),
   _controlFrequency(controlFrequency),
-  _minimumSafeDistance(minimumSafeDistance)
+  _minimumSafeDistance(minimumSafeDistance),
+  QPSolver<double>(solverOptions)
 {
+    // Esnure input arguments are sound
     if (_controlFrequency <= 0.0)
     {
         throw std::invalid_argument("[ERROR] [DIFFERENTIAL DRIVE BASE] Constructor: "
@@ -39,6 +43,15 @@ DifferentialDriveBase::DifferentialDriveBase(const double &controlFrequency,
                                     "Minimum safe distance must be positive ("
                                     + std::to_string(_minimumSafeDistance) + " <= 0.0)");
     }
+    
+    // Set the constraint matrix here to save time later:
+    
+    _controlConstraintMatrix << 1.0,  0.0,
+                                0.0,  1.0,
+                               -1.0,  0.0,
+                                0.0, -1.0;
+                                
+    _obstacleConstraintMatrix.resize(0,2);
 }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,15 +78,15 @@ DifferentialDriveBase::compute_control_limits(RobotLibrary::Model::Limits &linea
     {
         throw std::logic_error("[ERROR] [DIFFERENTIAL DRIVE] compute_limits(): "
                                "Lower bound for linear velocity is greater than upper bound ("
-                               + std::to_string(linear.lower) + " > " + std::to_string(linear.upper) +
-                               "). How did that happen???");
+                               + std::to_string(linear.lower) + " > " + std::to_string(linear.upper) + "). "
+                               "How did that happen???");
     }
     else if (angular.lower >= angular.upper)
     {
         throw std::logic_error("[ERROR] [DIFFERENTIAL DRIVE] compute_limits(): "
                                "Lower bound for angular velocity is greater than upper bound ("
-                               + std::to_string(angular.lower) + " > " + std::to_string(angular.upper) +
-                               "). How did that happen???");
+                               + std::to_string(angular.lower) + " > " + std::to_string(angular.upper) + "). "
+                               "How did that happen???");
     }
 }
 

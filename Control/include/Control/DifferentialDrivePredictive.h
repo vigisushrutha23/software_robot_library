@@ -12,9 +12,10 @@
  *          constructor arguments, whereas the weighting on intermediate control values is based on
  *          the robot's mass & inertia in the RobotLibary::Model::DifferentialDrive class.
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  */
@@ -32,8 +33,7 @@ namespace RobotLibrary { namespace Control {
  * @brief A class that performs nonlinear feedback control for trajectory tracking of a differential
  *        drive mobile robot.
  */
-class DifferentialDrivePredictive : public RobotLibrary::Control::DifferentialDriveBase,
-                                    public QPSolver<double>
+class DifferentialDrivePredictive : public RobotLibrary::Control::DifferentialDriveBase
 {
     public:
     
@@ -84,6 +84,8 @@ class DifferentialDrivePredictive : public RobotLibrary::Control::DifferentialDr
         
         private:
         
+        double _controlBarrierScalar = 5.0;                                                         ///< Scales the control barrier function for obstacle avoidance
+        
         double _threshold = 1e-10;                                                                  ///< Terminates algorithm early if this threshold is reached
         
         unsigned int _predictionSteps;                                                              ///< Number of steps in the prediction horizon
@@ -91,19 +93,7 @@ class DifferentialDrivePredictive : public RobotLibrary::Control::DifferentialDr
         unsigned int _numberOfRecursions;                                                           ///< Number of backward + forward passes
        
         Eigen::Matrix3d _finalPoseErrorWeight;                                                      ///< Weighting matrix on the final pose error
-        
-        Eigen::Matrix<double,4,2> _controlConstraintMatrix;                                         ///< Used in the QP solver to ensure control inputs are within bounds
-        
-        Eigen::Matrix<double,Eigen::Dynamic,2> _obstacleConstraintMatrix;                           ///< Used in the QP solver to avoid collision with obstacles
-        
-        Eigen::Matrix<double,Eigen::Dynamic,2> _constraintMatrix;                                   ///< Full constraint matrix passed to the QP solver
-        
-        Eigen::Vector<double,4> _controlConstraintVector;                                           ///< Use in the QP solver to ensure control input is within limits
-        
-        Eigen::VectorXd _obstacleConstraintVector;                                                  ///< Used in the QP solve to avoid collision with obstacles
-        
-        Eigen::VectorXd _constraintVector;                                                          ///< Full constraint vector passed to the QP solver
-        
+ 
         std::vector<Eigen::Matrix3d> _poseErrorWeight;                                              ///< Weighting matrix on the intermediate pose error
         
         std::vector<Eigen::Matrix2d> _controlWeight;                                                ///< Weighting on the intermediate control

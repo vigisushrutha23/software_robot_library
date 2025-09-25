@@ -2,13 +2,14 @@
  * @file    DataStructures.h
  * @author  Jon Woolfrey
  * @email   jonathan.woolfrey@gmail.com
- * @date    May 2025
+ * @date    July 2025
  * @version 1.1
  * @brief   Structs used in the Model classes.
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  */
@@ -53,6 +54,8 @@ struct DifferentialDriveParameters
     double maxAngularVelocity     = 100.0 * M_PI / 30.0;                                            ///< Maximum rotational speed (rad/s)
     double maxLinearAcceleration  = 5.0;                                                            ///< Maximum forward acceleration (m/s/s)
     double maxLinearVelocity      = 2.0;                                                            ///< Maximum forward speed (m/s)
+    double minimumSafeDistance    = 0.5;                                                            ///< Used for collision detection
+    
     Eigen::Matrix3d propagationUncertainty = Eigen::Matrix3d::Identity();                           ///< Uncertainty of configuration propagation in Kalman filter
     Eigen::Vector3d robotFootprint = Eigen::Vector3d::Constant(0.0);                                               ///< Distances of the robot footprint circles from the central pose (m)
     Eigen::Vector3d robotRadii = Eigen::Vector3d::Constant(0.3);                                                    ///< Radii of the robot footprint circles

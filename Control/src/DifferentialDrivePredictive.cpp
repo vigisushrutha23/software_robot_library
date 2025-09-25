@@ -32,8 +32,8 @@ DifferentialDrivePredictive::DifferentialDrivePredictive(RobotLibrary::Model::Di
                                                          SolverOptions<double> &solverOptions)
 : DifferentialDriveBase(controlParameters.controlFrequency,
                         controlParameters.minimumSafeDistance,
-                        modelParameters),
-  QPSolver<double>(solverOptions),
+                        modelParameters,
+                        solverOptions),
  _numberOfRecursions(controlParameters.numberOfRecursions),
  _predictionSteps(controlParameters.predictionSteps),
  _threshold(controlParameters.maximumControlStepNorm)
@@ -51,7 +51,7 @@ DifferentialDrivePredictive::DifferentialDrivePredictive(RobotLibrary::Model::Di
     _poseErrorWeight.resize(_predictionSteps);
     _controlWeight.resize(_predictionSteps);
 
-    // --- Pose Error Weights (Normalized Exponential) ---
+    // Pose Error Weights (Normalized Exponential)
     double exponent = controlParameters.exponent;
 
     // Precompute denominator for normalization
@@ -67,11 +67,6 @@ DifferentialDrivePredictive::DifferentialDrivePredictive(RobotLibrary::Model::Di
         double scalar = std::exp(exponent * j) / denominator;
         _poseErrorWeight[j] = scalar * controlParameters.poseErrorWeight;
     }
-
-    // --- Control Weights (Exponentially Scaled Inertia Matrix) ---
-    Eigen::Matrix2d inertiaMatrix;
-    inertiaMatrix << _mass,  0.0,
-                      0.0, _inertia;
 
     std::vector<double> expWeights(_predictionSteps);
 
@@ -90,17 +85,8 @@ DifferentialDrivePredictive::DifferentialDrivePredictive(RobotLibrary::Model::Di
     for (int i = 0; i < _predictionSteps; ++i)
     {
         double weight = expWeights[i] * scale;
-        _controlWeight[i] = weight * inertiaMatrix;
-    }
-    
-    // Set up the constraint matrices in advance to save time:
-
-    _controlConstraintMatrix << -1.0,  0.0,
-                                 0.0, -1.0,
-                                 1.0,  0.0,
-                                 0.0,  1.0;
-                                 
-    _obstacleConstraintMatrix.resize(0,2);                                                         
+        _controlWeight[i] = weight * _inertiaMatrix;
+    }                                                 
 }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,7 +102,7 @@ DifferentialDrivePredictive::update_state(const RobotLibrary::Model::Pose2D &pos
     // Transfer these from the base class so we can access them via index in the
     // backward / forward recursions
     _predictedStates[0].pose       = _pose;
-    _predictedStates[0].velocity   = _velocity;
+    _predictedStates[0].velocity   = this->velocity();                                              // Need "this->" to refer to the method in the base class
     _predictedStates[0].covariance = _covariance;
     
     // Shift the predicted states backward
@@ -133,6 +119,9 @@ Eigen::Vector2d
 DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Model::DifferentialDriveState>   &desiredStates,
                                               const std::vector<std::vector<RobotLibrary::Math::Ellipsoid<2>>> &obstacles)
 {
+    using namespace Eigen;
+    using namespace RobotLibrary::Model;
+    
     // Ensure inputs are sound
     if (desiredStates.size() != _predictionSteps + 1)
     {
@@ -147,7 +136,7 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
     {
         double largestStepChange = 0.0;                                                             // Store largest step change in control for this recursion
 
-        Eigen::Vector3d costateVector;                                                              // i.e. Lagrange multipliers
+        Vector3d costateVector;                                                                     // i.e. Lagrange multipliers
         
         // Backwards recursions
         for (int j = _predictionSteps-1; j >= 0; --j)
@@ -155,55 +144,39 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
             Eigen::Vector3d poseError = _predictedStates[j+1].pose.error(desiredStates[j+1].pose);  // Error at step j+1 is affected by control input at step j
             if (j == _predictionSteps - 1)
             {
-                costateVector = _poseErrorWeight[j] * poseError;                                    // Only need to evaluate costate vector at final steps   
+                costateVector = _poseErrorWeight[j] * _predictedStates[j].pose.error(desiredStates[j].pose);
             }
             else
             {
-                // Values used in this scope           
-                RobotLibrary::Model::Pose2D currentPose = _predictedStates[j].pose;
-                Eigen::Vector2d currentVelocity = _predictedStates[j].velocity;
-                Eigen::Vector2d desiredVelocity = desiredStates[j].velocity;
-                Eigen::Matrix3d K = _poseErrorWeight[j];
-                Eigen::Matrix2d M = _controlWeight[j];
-                double angle = currentPose.angle();                                                 // Used in multiple places
-                RobotLibrary::Model::Pose2D desiredPose = desiredStates[j].pose;
-                RobotLibrary::Model::Pose2D desiredNextPose =  RobotLibrary::Model::DifferentialDrive::predicted_pose(desiredStates[j].pose,
-                    desiredStates[j].velocity,
-                    _controlFrequency);
+                // Values used in this scope    
+                double angle             = _predictedStates[j].pose.angle();
+                Matrix3d K               = _poseErrorWeight[j];
+                Matrix2d M               = _controlWeight[j];
+                Pose2D currentPose       = _predictedStates[j].pose;
+                Vector2d currentVelocity = _predictedStates[j].velocity;
+                Vector2d desiredVelocity = desiredStates[j].velocity;
+                Vector3d nextPoseError   = _predictedStates[j+1].pose.error(desiredStates[j].pose);
+                Vector3d errorCorrection = K * nextPoseError + costateVector;
 
-                double angle_desired = desiredPose.angle();                                                 // Used in multiple places
-
-                Eigen::Vector3d poseError_curr = currentPose.error(desiredPose);
- 
                 // Partial derivative of state propagation w.r.t. configuration                                                    
                 Eigen::Matrix<double,3,3> dfdx = configuration_jacobian(currentPose, currentVelocity, _controlFrequency);
-                Eigen::Matrix<double,3,3> dfdx_nom = configuration_jacobian(desiredPose, desiredVelocity, _controlFrequency);
 
                     
                 // Partial derivative of state propagation w.r.t. control.
                 Eigen::Matrix<double,3,2> dfdu = control_jacobian(currentPose, _controlFrequency);
-                Eigen::Matrix<double,3,2> dfdudx = Eigen::MatrixXd::Zero(3,2);
-                dfdudx (0,0) = -sin(angle)/_controlFrequency;
-                dfdudx (1,0) = cos(angle)/_controlFrequency;
-
-                //dfdu(2,1) = 1.0; // THIS WORKS BETTER?
-                Eigen::Vector2d del_u = desiredVelocity - currentVelocity;
-                Eigen::Vector3d del_x = currentPose.error(desiredPose);
-                Eigen::Vector3d E =   del_x + dfdu * del_u;
+                dfdu(2,1) = 1.0;
 
                 // Partial derivative of state propagation w.r.t. configuration   
-                Eigen::Vector<double,2> dLdu =  -del_u.transpose() * M  - poseError.transpose() * K * dfdu + costateVector.transpose()* dfdu;
+                Eigen::Vector<double,2> dLdu = - M * (desiredVelocity - currentVelocity)
+                                               - dfdu.transpose() * errorCorrection;
                                                                       
                 // Second derivative of Lagrangian w.r.t. control (i.e. Hessian)
                 Eigen::Matrix<double,2,2> d2Ldu2 = M + dfdu.transpose() * K * dfdu;
-                                                 
-                d2Ldu2(0,0) += 1e-06;                                                               // Add some damping to ensure stability
-                d2Ldu2(1,1) += 1e-06;   
-                
+
                 // Mixed derivatives of Lagrangian 
-                Eigen::Matrix<double,2,3> d2Ldudx = dfdu.transpose() * K * dfdx ;
-                d2Ldudx(0,2) += (costateVector.transpose() * dfdudx.col(0));
-                d2Ldudx(0,2) -= (poseError.transpose()* K * dfdudx.col(0) );                                                          
+                Eigen::Matrix<double,2,3> d2Ldudx = dfdu.transpose() * K * dfdx;
+                d2Ldudx(0,2) += (errorCorrection[0] * sin(angle) - errorCorrection[0] * cos(angle)) / _controlFrequency;
+                                                                           
                 // Set up the constraint for the control input du
                 RobotLibrary::Model::Limits linear, angular;
                 
@@ -230,8 +203,8 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 }
                 */
                std::cout<<"\n=====Current Pose & Velocity "<<currentPose.translation()(0)<<"\t"<< currentPose.translation()(1)<<"\t"<<currentVelocity(0)<<"\t"<<currentVelocity(1)<<" ====\n";
-
-               Eigen::Vector3d dx = currentPose.error(desiredStates[j].pose);
+                Eigen::Vector2d del_u = (desiredVelocity - currentVelocity);
+                Eigen::Vector3d dx = currentPose.error(desiredStates[j].pose);
                _obstacleConstraintMatrix.resize(obstacles.size()*3,2);
                _obstacleConstraintVector.resize(obstacles.size()*3);
                 Eigen::MatrixXd P = Eigen::MatrixXd::Zero(2,3); //Selection matrix
@@ -335,8 +308,8 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 _constraintVector.segment(0,numRows) = _obstacleConstraintVector;
                 
                 // Solve the control
-                
-                Eigen::Vector2d du =del_u;                                                    // We want to solve for this                                        
+                //Eigen::Vector3d dx = currentPose.error(desiredStates[j].pose);
+                Eigen::Vector2d du = {0.0, 0.0};                                                    // We want to solve for this                                        
                 try
                 {
                     du = QPSolver<double>::solve(d2Ldu2,
@@ -356,21 +329,14 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
 
                     
                 }
-                std::cout<<"\n ====== Change in Velocity========== "<<du(0)<<"\t"<<du(1);
-                _predictedStates[j].velocity += du ;                                                 // Increment control input
-
+                
                 double norm = du.norm();
+                
+                if (norm > largestStepChange) largestStepChange = norm;
+                
+                _predictedStates[j].velocity += du;                                                 // Increment control input
 
-                if (norm > largestStepChange) largestStepChange = norm;                             // Save the largest
-                
-                RobotLibrary::Model::Pose2D tempNewPose = RobotLibrary::Model::DifferentialDrive::predicted_pose(_predictedStates[j].pose,
-                                                                   _predictedStates[j].velocity,
-                                                                   _controlFrequency);
-                
-                Eigen::Vector3d new_E  = tempNewPose.error(desiredStates[j+1].pose);
-                std::cout<<"\n========New Error ========== \n"<<new_E;
-                //dfdx = configuration_jacobian(currentPose, _predictedStates[j].velocity  , _controlFrequency); 
-                costateVector = -new_E.transpose() * K *dfdx  + costateVector.transpose()*dfdx; 
+                costateVector = dfdx.transpose() * errorCorrection;
             }
         }
         
@@ -389,7 +355,7 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                                                                          _controlFrequency);
         }
         
-        if (largestStepChange < _threshold) break;                                                  // Break early if step change is tiny
+        if (largestStepChange < _threshold) break;
     }
     
     return _predictedStates[0].velocity;                                                            // Only return the 1sts

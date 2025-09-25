@@ -2,16 +2,17 @@
  * @file    RigidBody.cpp
  * @author  Jon Woolfrey
  * @email   jonathan.woolfrey@gmail.com
- * @date    April 2025
- * @version 1.0
+ * @date    July 2025
+ * @version 1.1
  * @brief   A class for describing the kinematics & dynamics of a single, ridid body.
  * 
  * @details This class contains the kinematic & dynamic properties of a single rigid body.
  *          It can be used to compute the forces and torques due to its dynamic motion.
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  */
@@ -63,8 +64,7 @@ RigidBody::update_state(const RobotLibrary::Model::Pose &pose,
      
      Eigen::Vector3d w = _twist.tail(3);                                                            // Needed so we can do cross product
      
-     for(int i = 0; i < 3; i++) _inertiaDerivative.col(i) = w.cross(_inertia.col(i));               // Perform cross product on every column
-     
+     for(int i = 0; i < 3; ++i) _inertiaDerivative.col(i) = w.cross(_inertia.col(i));               // Perform cross product on every column
 }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////

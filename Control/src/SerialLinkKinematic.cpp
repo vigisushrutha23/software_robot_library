@@ -1,46 +1,64 @@
 /**
- * @file    SerialKinematicControl.cpp
+ * @file    SerialLinkKinematic.cpp
  * @author  Jon Woolfrey
  * @email   jonathan.woolfrey@gmail.com
- * @date    February 2025
- * @version 1.0
+ * @date    August 2025
+ * @version 2.0.1
+ *
  * @brief   Computes velocity (position) feedback control for a serial link robot arm.
  * 
  * @details This class contains methods for performing velocity control of a serial link robot arm
  *          in both Cartesian and joint space. The fundamental feedforward + feedback control is given by:
  *          control velocity = desired velocity + gain * (desired position - actual position).
  * 
- * @copyright Copyright (c) 2025 Jon Woolfrey
- * 
- * @license GNU General Public License V3
+ * @copyright (c) 2025 Jon Woolfrey
+ *
+ * @license   OSCL - Free for non-commercial open-source use only.
+ *            Commercial use requires a license.
  * 
  * @see https://github.com/Woolfrey/software_robot_library for more information.
  * @see https://github.com/Woolfrey/software_simple_qp for the optimisation algorithm used in the control.
  */
 
-#include <Control/SerialKinematicControl.h>
+#include <Control/SerialLinkKinematic.h>
 
 namespace RobotLibrary { namespace Control {
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////
+ //                                          Constructor                                          //
+///////////////////////////////////////////////////////////////////////////////////////////////////
+SerialLinkKinematic::SerialLinkKinematic(std::shared_ptr<RobotLibrary::Model::KinematicTree> model,
+		                                 const std::string &endpointName,
+		                                 const RobotLibrary::Control::SerialLinkParameters &parameters)
+: SerialLinkBase(model, endpointName, parameters)
+{
+    std::cout << "[INFO] [SERIAL LINK KINEMATICS] ";
+    std::cout << "Performing VELOCITY control on the " + _model->name() + " robot.";
+}
+		                       
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
  //               Compute the endpoint velocity needed to track a given trajectory                //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 Eigen::VectorXd
-SerialKinematicControl::track_endpoint_trajectory(const RobotLibrary::Model::Pose &desiredPose,
-                                                  const Eigen::Vector<double,6>   &desiredVelocity,
-                                                  const Eigen::Vector<double,6>   &desiredAcceleration)
+SerialLinkKinematic::track_endpoint_trajectory(const RobotLibrary::Model::Pose &desiredPose,
+                                               const Eigen::Vector<double,6>   &desiredVelocity,
+                                               const Eigen::Vector<double,6>   &desiredAcceleration)
 {
-     (void)desiredAcceleration;                                                                     // Not needed in velocity control
-     
+    (void)desiredAcceleration;                                                                      // Not needed in velocity control
+
+    // NOTE: This method saves the magnitude of position and orientation error internally,
+    //       so it can be queried after for analysing performance
+    Eigen::Vector<double,6> poseError = pose_error(desiredPose);
+    
 	return resolve_endpoint_motion(desiredVelocity                                                  // Feedforward term
-	                             + _cartesianStiffness * _endpointPose.error(desiredPose));         // Feedback term
+	                             + _cartesianPoseGain * poseError);                                 // Feedback term
 }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////
  //                                       This doesn't do much...!                                //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 Eigen::VectorXd
-SerialKinematicControl::resolve_endpoint_twist(const Eigen::Vector<double,6> &twist)
+SerialLinkKinematic::resolve_endpoint_twist(const Eigen::Vector<double,6> &twist)
 {
     return resolve_endpoint_motion(twist);
 }
@@ -49,7 +67,7 @@ SerialKinematicControl::resolve_endpoint_twist(const Eigen::Vector<double,6> &tw
  //              Solve the endpoint motion required to achieve a given endpoint motion             //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 Eigen::VectorXd
-SerialKinematicControl::resolve_endpoint_motion(const Eigen::Vector<double,6> &endpointMotion)
+SerialLinkKinematic::resolve_endpoint_motion(const Eigen::Vector<double,6> &endpointMotion)
 {
     using namespace Eigen;                                                                          // Improves readability
     
@@ -75,7 +93,7 @@ SerialKinematicControl::resolve_endpoint_motion(const Eigen::Vector<double,6> &e
     _constraintMatrix.row(2 * numJoints)            = -manipulabilityGradient.transpose();          // Part of the control barrier function
     _constraintVector.head(numJoints)               = upperBound;
     _constraintVector.segment(numJoints, numJoints) = -lowerBound;
-    _constraintVector(2 * numJoints)                = (_manipulability - _minManipulability) * 100 * sqrt(_controlFrequency);
+    _constraintVector(2 * numJoints)                = (_manipulability - _minManipulability) * _controlFrequency;
 
     VectorXd controlVelocity = VectorXd::Zero(numJoints);                                           // We need to compute this
 
@@ -157,15 +175,15 @@ SerialKinematicControl::resolve_endpoint_motion(const Eigen::Vector<double,6> &e
  //                  Compute the joint velocities needed to track a given trajectory              //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 Eigen::VectorXd
-SerialKinematicControl::track_joint_trajectory(const Eigen::VectorXd &desiredPosition,
-                                               const Eigen::VectorXd &desiredVelocity,
-						                       const Eigen::VectorXd &desiredAcceleration)
+SerialLinkKinematic::track_joint_trajectory(const Eigen::VectorXd &desiredPosition,
+                                            const Eigen::VectorXd &desiredVelocity,
+						                    const Eigen::VectorXd &desiredAcceleration)
 {
 	unsigned int numJoints = _model->number_of_joints();                                            // Makes things easier
 	
 	if(desiredPosition.size() != numJoints or desiredVelocity.size() != numJoints)
 	{
-		throw std::invalid_argument("[ERROR] [SERIAL LINK] track_joint_trajectory(): "
+		throw std::invalid_argument("[ERROR] [SERIAL LINK KINEMATICS] track_joint_trajectory(): "
 		                            "Incorrect size for input arguments. This robot has "
 		                            + std::to_string(numJoints) + " joints, but "
 		                            "the position argument had " + std::to_string(desiredPosition.size()) + " elements, and"
@@ -176,8 +194,8 @@ SerialKinematicControl::track_joint_trajectory(const Eigen::VectorXd &desiredPos
 	
 	for(int i = 0; i < numJoints; ++i)
 	{
-		velocityControl(i) = desiredVelocity(i)                                                      // Feedforward control
-		                   + _jointPositionGain*(desiredPosition(i) - _model->joint_positions()[i]); // Feedback control
+		velocityControl(i) = desiredVelocity(i)                                                            // Feedforward control
+		                   + _jointPositionGains[i] * (desiredPosition(i) - _model->joint_positions()[i]); // Feedback control
 		
 		RobotLibrary::Model::Limits controlLimits = compute_control_limits(i);                      // Get the instantaneous limits on the joint speed
 		                   
@@ -192,7 +210,7 @@ SerialKinematicControl::track_joint_trajectory(const Eigen::VectorXd &desiredPos
  //                   Compute the instantaneous limits on the joint velocities                    //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 RobotLibrary::Model::Limits
-SerialKinematicControl::compute_control_limits(const unsigned int &jointNumber)
+SerialLinkKinematic::compute_control_limits(const unsigned int &jointNumber)
 {
 	// Flacco, F., De Luca, A., & Khatib, O. (2015).
 	// "Control of redundant robots under hard joint constraints: Saturation in the null space."
@@ -217,7 +235,7 @@ SerialKinematicControl::compute_control_limits(const unsigned int &jointNumber)
 	if(limits.lower > limits.upper)
 	{
 	    throw std::runtime_error(
-	        "[ERROR] [SERIAL KINEMATIC CONTROL] compute_control_limits():"
+	        "[ERROR] [SERIAL LINK KINEMATICS] compute_control_limits():"
 	        "Lower limit for the '" + _model->link(jointNumber)->joint().name() + "' joint is greater than "
 	        "upper limit (" + std::to_string(limits.lower) + " > " + std::to_string(limits.upper) + "). "
 	        "How did that happen???");
@@ -226,4 +244,4 @@ SerialKinematicControl::compute_control_limits(const unsigned int &jointNumber)
 	return limits;
 }
 
-} }
+} } // namespace
