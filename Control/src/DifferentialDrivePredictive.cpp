@@ -209,18 +209,18 @@ DifferentialDrivePredictive::track_trajectory(const std::vector<RobotLibrary::Mo
                 }
                 
                 // Combine the constraints
-                //unsigned int numRows = _controlConstraintVector.size() + _obstacleConstraintVector.size();
-                unsigned int numRows =  _obstacleConstraintVector.size();
+                unsigned int numRows = _controlConstraintVector.size() + _obstacleConstraintVector.size();
+                //unsigned int numRows =  _obstacleConstraintVector.size();
                 _constraintMatrix.resize(numRows, 2);
-                //_constraintMatrix.block(0,0,4,2)         = _controlConstraintMatrix;
+                _constraintMatrix.block(0,0,4,2)         = _controlConstraintMatrix;
                 _constraintMatrix.block(0,0,numRows,2) = _obstacleConstraintMatrix;
                 
                 _constraintVector.resize(numRows);
-                //_constraintVector.segment(0,4)         = _controlConstraintVector;
+                _constraintVector.segment(0,4)         = _controlConstraintVector;
                 _constraintVector.segment(0,numRows) = _obstacleConstraintVector;
                 
                 // Solve the control
-                //Eigen::Vector3d dx = currentPose.error(desiredStates[j].pose);
+                Eigen::Vector3d dx = currentPose.error(desiredStates[j].pose);
                 Eigen::Vector2d du = {0.0, 0.0};                                                    // We want to solve for this                                        
                 try
                 {
