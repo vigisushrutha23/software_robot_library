@@ -121,7 +121,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
     using namespace RobotLibrary::Model;
     
     // Global scope
-    double goldenRatio = (1.0 + sqrt(5.0)) / 2.0;
+    double goldenRatio = 1.4/200 ;
     double roundingError = 1e-12;                                                                   // Used to avoid dividing by zero
     double obstaclePotentialScalar = _obstaclePotentialScalar;                                      // So we can modify it
     unsigned int currentNumberOfRewinds = 0;
@@ -152,12 +152,13 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
         // Local scope
         bool   rewindNeeded      = false; 
         double largestStepChange = 0.0;                                                             // Store largest step change in control for this recursio
-        double potentialDivisor  = goldenRatio * (i+1);                                             // Shrinks potential function with each iteration
+        double potentialDivisor;                                          // Shrinks potential function with each iteration
         Vector3d lagrangeMultipliers;                                                               // This equivalent to a wrench for SE(2)
         
         // Backwards recursions
         for (int j = _predictionSteps; j >= 0; --j)
         {
+            potentialDivisor  = goldenRatio * (j+1) + 0.093; 
             if (j == _predictionSteps)                                                              // i.e final configuration
             {
                 Pose2D currentPose = predictedStates[j].pose;                                       // This just makes code shorter

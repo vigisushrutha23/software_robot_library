@@ -159,7 +159,7 @@ MinimumArcLength::query_state(const double &time)
          
             double ds = sqrt(r * r + dr * dr);                                                      // Partial derivative of arc length w.r.t. angle parameter
             
-            _state.velocity[0] = omega * ds;                                                        // Linear velocity = ds/dt = d\theta/dt * ds/d\theta
+            _state.velocity[0] = std::fabs(omega) * ds;                                                        // Linear velocity = ds/dt = d\theta/dt * ds/d\theta
             _state.velocity[1] = omega;                                                             // Angular velocity
             
             _state.acceleration[0] = alpha * ds + (2.0 * r * dr * omega * omega) / ds;              // Linear acceleration
