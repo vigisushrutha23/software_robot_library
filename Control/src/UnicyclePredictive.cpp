@@ -147,6 +147,8 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
     }
     
     // Run the optimisation
+    auto recursion_start = std::chrono::high_resolution_clock::now();
+
     for (int i = 0; i < _numberOfRecursions; ++i)
     { 
         // Local scope
@@ -320,6 +322,11 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
         }
         
         if (largestStepChange < _threshold) break;
+        auto recursion_now = std::chrono::high_resolution_clock::now();
+        double time_taken = std::chrono::duration_cast<std::chrono::nanoseconds>(recursion_now - recursion_start).count();
+        if(1e-9*time_taken > 0.008)
+        break;
+
     }
     
     _predictedStates = predictedStates;                                                             // Save solution
