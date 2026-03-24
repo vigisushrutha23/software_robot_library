@@ -101,7 +101,7 @@ MinimumArcLength::MinimumArcLength(const RobotLibrary::Model::Pose2D &startPose,
      _endTime   = endTime;
      
      _startPoint.position     = Eigen::Vector3d(startPose.translation()[0], startPose.translation()[1], startPose.angle());
-     _startPoint.velocity     = Eigen::Vector2d::Zero();
+     _startPoint.velocity     = startVelocity;
      _startPoint.acceleration = Eigen::Vector2d::Zero();
     
      _endPoint.position     = Eigen::Vector3d(endPoint[0], endPoint[1], startPose.angle() + finalLocalHeading);
