@@ -87,6 +87,8 @@ class UnicyclePredictive : public RobotLibrary::Control::UnicycleBase
         
         double _obstaclePotentialScalar = 1e-01;                                                    ///< Determines magnitude of repulsive force
 
+        double _potentialCutoffDistance = 1.5;
+
         double _threshold = 1e-06;                                                                  ///< Terminates algorithm early if this threshold is reached
         
         unsigned int _predictionSteps;                                                              ///< Number of steps in the prediction horizon

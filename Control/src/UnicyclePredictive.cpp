@@ -34,7 +34,8 @@ UnicyclePredictive::UnicyclePredictive(RobotLibrary::Model::UnicycleParameters &
  _numberOfRecursions(controlParameters.numberOfRecursions),
  _obstaclePotentialScalar(controlParameters.obstaclePotentialScalar),
  _predictionSteps(controlParameters.predictionSteps),
- _threshold(controlParameters.maximumControlStepNorm)
+ _threshold(controlParameters.maximumControlStepNorm),
+ _potentialCutoffDistance(controlParameters.potentialCutoffDist)
 {    
     // Ensure weighting matrices are positive definite:
     std::string message;
@@ -172,33 +173,36 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                     Vector2d currentPosition = currentPose.translation();                           // For brevity
                     
                     auto query = obstacles[j][k].query_point(currentPosition);                      // Check for distance, etc.
-                    
-                    double distance = query.signedDistance - _minimumSafeDistance;                  // Subtract safe distance
-   
-                    if (distance < 0.0)
+
+                    if(query.signedDistance < _potentialCutoffDistance)
                     {
-                        if (i > 0 and currentNumberOfRewinds < totalNumberOfRewinds)
+                        double distance = query.signedDistance - _minimumSafeDistance;                  // Subtract safe distance
+    
+                        if (distance < 0.0)
                         {
-                            rewindNeeded = true;
-                            break;                                                                  // Break k loop
+                            if (i > 0 and currentNumberOfRewinds < totalNumberOfRewinds)
+                            {
+                                rewindNeeded = true;
+                                break;                                                                  // Break k loop
+                            }
+                            else
+                            {
+                                throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
+                                                        "Collision detected with '" + obstacles[j][k].name() + "' "
+                                                        "on prediction step " + std::to_string(j+1) + ".");
+                            }
                         }
-                        else
-                        {
-                            throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
-                                                     "Collision detected with '" + obstacles[j][k].name() + "' "
-                                                     "on prediction step " + std::to_string(j+1) + ".");
-                        }
-                    }
+                        
+                        /**************************** Harmonic ****************************************/
+                        potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
+                                                * query.translationVector / (pow(distance,2.0) + roundingError);
+                        /******************************************************************************/
                     
-                    /**************************** Harmonic ****************************************/
-                    potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
-                                               * query.translationVector / (pow(distance,2.0) + roundingError);
-                    /******************************************************************************/
-                   
-                    /****************************** NON Harmonic **********************************
-                    potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
-                                               * query.translationVector / (pow(distance,3.0) + roundingError);
-                    /*******************************************************************************/
+                        /****************************** NON Harmonic **********************************
+                        potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
+                                                * query.translationVector / (pow(distance,3.0) + roundingError);
+                        /*******************************************************************************/
+                    }
                 }
                 
                 if (rewindNeeded) break;                                                            // Break j loop
@@ -221,38 +225,41 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                 {
                     auto query = obstacles[j+1][k].query_point(nextPose.translation());
                     
-                    double distance = query.signedDistance - _minimumSafeDistance;
+                    if(query.signedDistance < _potentialCutoffDistance)
+                    {
+                        double distance = query.signedDistance - _minimumSafeDistance;
 
-                    if (distance < 0.0)
-                    {           
-                        if (i > 0 and currentNumberOfRewinds < totalNumberOfRewinds)
-                        {
-                            rewindNeeded = true;
-                            break;                                                                  // Break k loop
+                        if (distance < 0.0)
+                        {           
+                            if (i > 0 and currentNumberOfRewinds < totalNumberOfRewinds)
+                            {
+                                rewindNeeded = true;
+                                break;                                                                  // Break k loop
+                            }
+                            else
+                            {
+                                throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
+                                                        "Collision detected with obstacle '" + obstacles[j+1][k].name() + "' "
+                                                        "on prediction step " + std::to_string(j+1) + ".");
+                            }
                         }
-                        else
-                        {
-                            throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
-                                                     "Collision detected with obstacle '" + obstacles[j+1][k].name() + "' "
-                                                     "on prediction step " + std::to_string(j+1) + ".");
-                        }
+                    
+                        /******************************** Harmonic ************************************/
+                        potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
+                                                *  query.translationVector / (pow(distance,2.0) + roundingError);
+
+                        potentialHessian.block(0,0,2,2) += (obstaclePotentialScalar / (potentialDivisor * (pow(distance,2.0) + roundingError)))
+                                                        * ( 2.0 * (query.translationVector * query.translationVector.transpose()) / (pow(distance,2.0) + roundingError)   - Matrix2d::Identity());
+                        /*******************************************************************************/
+
+                        /******************************** NON Harmonic ********************************
+                        potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
+                                                * query.translationVector / (pow(distance,3.0) + roundingError);
+
+                        potentialHessian.block(0,0,2,2) += (obstaclePotentialScalar / (potentialDivisor * (pow(distance,3.0) + roundingError)))
+                                                        * ( 3.0 * (query.translationVector * query.translationVector.transpose()) / (pow(distance,2.0) + roundingError) - Matrix2d::Identity());
+                        /*******************************************************************************/
                     }
-                  
-                    /******************************** Harmonic ************************************/
-                    potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
-                                               *  query.translationVector / (pow(distance,2.0) + roundingError);
-
-                    potentialHessian.block(0,0,2,2) += (obstaclePotentialScalar / (potentialDivisor * (pow(distance,2.0) + roundingError)))
-                                                     * ( 2.0 * (query.translationVector * query.translationVector.transpose()) / (pow(distance,2.0) + roundingError)   - Matrix2d::Identity());
-                    /*******************************************************************************/
-
-                    /******************************** NON Harmonic ********************************
-                    potentialGradient.head(2) -= (obstaclePotentialScalar / potentialDivisor)
-                                               * query.translationVector / (pow(distance,3.0) + roundingError);
-
-                    potentialHessian.block(0,0,2,2) += (obstaclePotentialScalar / (potentialDivisor * (pow(distance,3.0) + roundingError)))
-                                                     * ( 3.0 * (query.translationVector * query.translationVector.transpose()) / (pow(distance,2.0) + roundingError) - Matrix2d::Identity());
-                    /*******************************************************************************/
                 }
                 
                 if (rewindNeeded) break;                                                            // Break j-loop
