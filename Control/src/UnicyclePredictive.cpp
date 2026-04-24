@@ -149,6 +149,8 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
     
     // Run the optimisation
     auto recursion_start = std::chrono::high_resolution_clock::now();
+    int actual_predicted_steps = _predictionSteps;
+    bool restart_recursions = false;
 
     for (int i = 0; i < _numberOfRecursions; ++i)
     { 
@@ -157,9 +159,9 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
         double largestStepChange = 0.0;                                                             // Store largest step change in control for this recursio
         double potentialDivisor;                                          // Shrinks potential function with each iteration
         Vector3d lagrangeMultipliers;                                                               // This equivalent to a wrench for SE(2)
-        
+        restart_recursions = false;
         // Backwards recursions
-        for (int j = _predictionSteps; j >= 0; --j)
+        for (int j = actual_predicted_steps; j >= 0; --j)
         {
             potentialDivisor  = 0.09; 
             if (j == _predictionSteps)                                                              // i.e final configuration
@@ -187,9 +189,19 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
+                                if(j > 0.5*_predictionSteps )
+                                {
+                                    actual_predicted_steps = j-10;
+                                    restart_recursions = true;
+                                    break;
+                                }
+                                else
+
+                                {
+                                    throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
                                                         "Collision detected with '" + obstacles[j][k].name() + "' "
                                                         "on prediction step " + std::to_string(j+1) + ".");
+                                }
                             }
                         }
                         
@@ -206,6 +218,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                 }
                 
                 if (rewindNeeded) break;                                                            // Break j loop
+                if(restart_recursions){i--; break;}
 
                 lagrangeMultipliers = -potentialGradient;                                           // This is a force vector              
             }
@@ -238,9 +251,18 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
+                                if(j > 0.5*_predictionSteps )
+                                {
+                                    actual_predicted_steps = j-10;
+                                    restart_recursions = true;
+                                    break;
+                                }
+                                else 
+                                {
+                                    throw std::runtime_error("[ERROR] [UNICYCLE PREDICTIVE CONTROL] track_trajectory(): "
                                                         "Collision detected with obstacle '" + obstacles[j+1][k].name() + "' "
                                                         "on prediction step " + std::to_string(j+1) + ".");
+                                }
                             }
                         }
                     
@@ -263,6 +285,8 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                 }
                 
                 if (rewindNeeded) break;                                                            // Break j-loop
+                if(restart_recursions){i--; break;}
+
                   
                 Vector3d temp = potentialGradient - lagrangeMultipliers;                            // Need this in a couple of places below
                 
