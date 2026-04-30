@@ -164,7 +164,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
         for (int j = actual_predicted_steps; j >= 0; --j)
         {
             potentialDivisor  = 0.09; 
-            if (j == _predictionSteps)                                                              // i.e final configuration
+            if (j == actual_predicted_steps)                                                              // i.e final configuration
             {
                 Pose2D currentPose = predictedStates[j].pose;                                       // This just makes code shorter
                 Vector3d potentialGradient = -_poseErrorWeight[j] * currentPose.error(desiredStates[j].pose); // NOTE: Force is -K * e = dP/dx
@@ -189,7 +189,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                if(j > 0.8*_predictionSteps )
+                                if(j > 0.5*_predictionSteps )
                                 {
                                     actual_predicted_steps = j-10;
                                     restart_recursions = true;
@@ -251,7 +251,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                if(j > 0.8*_predictionSteps )
+                                if(j > 0.5*_predictionSteps )
                                 {
                                     actual_predicted_steps = j-10;
                                     restart_recursions = true;
