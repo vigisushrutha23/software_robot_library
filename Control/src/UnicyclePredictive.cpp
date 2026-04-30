@@ -189,7 +189,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                if(j > 0.5*_predictionSteps )
+                                if(j > 0.8*_predictionSteps )
                                 {
                                     actual_predicted_steps = j-10;
                                     restart_recursions = true;
@@ -251,7 +251,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                if(j > 0.5*_predictionSteps )
+                                if(j > 0.8*_predictionSteps )
                                 {
                                     actual_predicted_steps = j-10;
                                     restart_recursions = true;
