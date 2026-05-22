@@ -160,6 +160,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
         double potentialDivisor;                                          // Shrinks potential function with each iteration
         Vector3d lagrangeMultipliers;                                                               // This equivalent to a wrench for SE(2)
         restart_recursions = false;
+        Pose2D zeroPose = predictedStates[0].pose;
         // Backwards recursions
         for (int j = actual_predicted_steps; j >= 0; --j)
         {
@@ -173,6 +174,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                 for (int k = 0; k < obstacles[j].size(); ++k)
                 {
                     Vector2d currentPosition = currentPose.translation();                           // For brevity
+                    auto zeroQuery = obstacles[j][k].query_point(zeroPose.translation());
                     
                     auto query = obstacles[j][k].query_point(currentPosition);                      // Check for distance, etc.
 
@@ -189,7 +191,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                if(j > 0.5*_predictionSteps )
+                                if(j > 0.5*_predictionSteps || zeroQuery.signedDistance > 1.5 )
                                 {
                                     actual_predicted_steps = j-10;
                                     restart_recursions = true;
@@ -236,6 +238,8 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                 // Add up effect of obstacles
                 for (int k = 0; k < numObstacles; ++k)
                 {
+                    auto zeroQuery = obstacles[j][k].query_point(zeroPose.translation());
+
                     auto query = obstacles[j+1][k].query_point(nextPose.translation());
                     
                     if(query.signedDistance < _potentialCutoffDistance)
@@ -251,7 +255,7 @@ UnicyclePredictive::track_trajectory(const std::vector<RobotLibrary::Model::Unic
                             }
                             else
                             {
-                                if(j > 0.5*_predictionSteps )
+                                if(j > 0.5*_predictionSteps || zeroQuery.signedDistance > 1.5)
                                 {
                                     actual_predicted_steps = j-10;
                                     restart_recursions = true;
